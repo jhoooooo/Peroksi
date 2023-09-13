@@ -54,10 +54,10 @@ const limiter = rateLimit({
     }
   }
   
-  app.get('/api/twitch/:queryParam', cache('5 minutes'), async (req, res) => {
-    const queryParam = req.params.queryParam; // Get the entire query parameter from the URL
-    const queryString = req.url.split('?')[1]; // Extract the query string from the URL
-    const url = `${TWITCH_API_BASE_URL}/${queryParam}?${queryString}`;
+  app.get('/api/twitch/*', cache('5 minutes'), async (req, res) => {
+    const query = req.originalUrl.replace('/api/twitch/', '');
+    console.log(`Query: ${query}`);
+    const url = `${TWITCH_API_BASE_URL}/${query}`;
     console.log(`Requesting: ${url}`);
     
     try {
