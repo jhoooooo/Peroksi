@@ -18,7 +18,7 @@ const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 // Middleware for rate limiting
 const limiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minutes
-    max: 60, // Limit
+    max: 6, // Limit: 6 call per minute / 1 every 10 seconds
   });
   app.use(limiter);
   
@@ -52,9 +52,21 @@ const limiter = rateLimit({
       return appToken;
     }
   }
+
+  // Middleware to allow only /api/twitch/ routes
+  app.use((req, res, next) => {
+    if (req.url.startsWith('/api/twitch/')) {
+      next(); // Allow requests to /api/twitch/ and its sub-routes
+    } else {
+      res.status(403).json({ message: 'Access Forbidden' });
+    }
+  });
   
   app.get('/api/twitch/*', cache('5 minutes'), async (req, res) => {
     const query = req.originalUrl.replace('/api/twitch/', '');
+    if (!query) {
+      return res.status(400).json({ message: 'Bad Request - Missing query' });
+    }
     console.log(`Query: ${query}`);
     const url = `${TWITCH_API_BASE_URL}/${query}`;
     console.log(`Requesting: ${url}`);
