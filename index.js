@@ -16,7 +16,6 @@ const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
 const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
 // Middleware for rate limiting
-// Middleware for rate limiting
 const limiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minutes
     max: 60, // Limit
