@@ -83,7 +83,6 @@ app.get('/api/twitch/*', cache('5 minutes'), async (req, res) => {
         });
 
         if (response.statusCode === 200) {
-            res.set('Cache-Control', 'public, max-age=60');
             res.json(response.body);
         } else {
             throw new Error('Failed to fetch data from Twitch API.');
