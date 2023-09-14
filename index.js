@@ -9,6 +9,9 @@ const apicache = require('apicache');
 const cache = apicache.middleware;
 require('dotenv').config()
 
+
+apicache.options({ debug: false })
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
@@ -30,7 +33,7 @@ const TWITCH_API_BASE_URL = 'https://api.twitch.tv/helix';
 let accessToken;
 
 function isTokenExpired(accessToken) {
-    if (!accessToken || !accessToken.expires_in) {
+    if (!accessToken) {
         return true;
     } else {
         const currentTimestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
@@ -74,23 +77,23 @@ app.use((req, res, next) => {
 
 app.get('/api/twitch/*', cache('5 minutes'), async (req, res) => {
 
-    console.log("Fetaching data from Twitch's Api...")
+    console.log("Fetching new data from Twitch's Api...")
 
     const query = req.originalUrl.replace('/api/twitch/', '');
 
     if (!query) {
         return res.status(400).json({ message: 'Bad Request - Missing query' });
     }
-    
+
     const url = `${TWITCH_API_BASE_URL}/${query}`;
-    console.log(`Requesting: ${url}`);
+    console.log(`Query: ${url}`);
 
     try {
         accessToken = await kv.get("twitch_access_token");
         const isExpired = isTokenExpired(accessToken);
-        
-        if (!accessToken || isExpired  ) {
-            
+
+        if (!accessToken || isExpired) {
+
             console.log(`Access token does not exist or invalid...`);
             accessToken = await getAppToken();
             console.log(`New access token: [...${accessToken.access_token.slice(-6)}]`);
@@ -100,9 +103,10 @@ app.get('/api/twitch/*', cache('5 minutes'), async (req, res) => {
                     'Authorization': `Bearer ${accessToken.access_token}`,
                 },
             });
-            
+
             response.body.last_updated = Date.now();
             if (response.statusCode === 200) {
+                res.set({ 'Cache-Control': 'max-age=300' });
                 res.json(response.body);
             } else {
                 throw new Error('Failed to fetch data from Twitch API.');
@@ -116,10 +120,11 @@ app.get('/api/twitch/*', cache('5 minutes'), async (req, res) => {
                     'Authorization': `Bearer ${accessToken.access_token}`,
                 },
             });
-            
+
             response.body.last_updated = Date.now();
-            
+
             if (response.statusCode === 200) {
+                res.set({ 'Cache-Control': 'max-age=300' });
                 res.json(response.body);
             } else {
                 throw new Error('Failed to fetch data from Twitch API.');
