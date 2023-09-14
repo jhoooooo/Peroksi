@@ -18,7 +18,7 @@ const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 // Middleware for rate limiting
 const limiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minutes
-    max: 6, // Limit: 6 call per minute / 1 every 10 seconds
+    max: 30, // Limit: 60 call per minute / 1 every 2 seconds
 });
 app.use(limiter);
 app.set('trust proxy', 1);
