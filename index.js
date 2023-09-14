@@ -1,3 +1,4 @@
+const { kv } = require('@vercel/kv');
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
@@ -26,31 +27,39 @@ app.set('trust proxy', 1);
 // Define your Twitch API endpoints
 const TWITCH_API_BASE_URL = 'https://api.twitch.tv/helix';
 
-let appToken = null;
+let accessToken;
+
+function isTokenExpired(accessToken) {
+    if (!accessToken || !accessToken.expires_in) {
+        return true;
+    } else {
+        const currentTimestamp = Math.floor(Date.now() / 1000); // Get current timestamp in seconds
+        const tokenExpirationTimestamp = currentTimestamp + accessToken.expires_in;
+        return currentTimestamp >= tokenExpirationTimestamp;
+    }
+}
 
 async function getAppToken() {
-    if (!appToken) {
-        try {
-            const authUrl = 'https://id.twitch.tv/oauth2/token';
-            const authData = `client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials`;
+    try {
+        console.log("Fetching new access token...");
+        const authUrl = 'https://id.twitch.tv/oauth2/token';
+        const authData = `client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials`;
 
-            const response = await needle('post', authUrl, authData, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-            });
+        const response = await needle('post', authUrl, authData, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+        });
 
-            if (response.statusCode === 200) {
-                appToken = response.body.access_token;
-                return appToken;
-            } else {
-                throw new Error('Failed to obtain Twitch app token.');
-            }
-        } catch (error) {
-            throw error;
+        if (response.statusCode === 200) {
+            accessToken = response.body;
+            await kv.set("twitch_access_token", accessToken);
+            return accessToken;
+        } else {
+            throw new Error('Failed to obtain Twitch app token.');
         }
-    } else {
-        return appToken;
+    } catch (error) {
+        throw error;
     }
 }
 
@@ -64,28 +73,57 @@ app.use((req, res, next) => {
 });
 
 app.get('/api/twitch/*', cache('5 minutes'), async (req, res) => {
+
+    console.log("Fetaching data from Twitch's Api...")
+
     const query = req.originalUrl.replace('/api/twitch/', '');
+
     if (!query) {
         return res.status(400).json({ message: 'Bad Request - Missing query' });
     }
-    console.log(`Query: ${query}`);
+    
     const url = `${TWITCH_API_BASE_URL}/${query}`;
     console.log(`Requesting: ${url}`);
 
     try {
-        const accessToken = await getAppToken();
+        accessToken = await kv.get("twitch_access_token");
+        const isExpired = isTokenExpired(accessToken);
+        
+        if (!accessToken || isExpired  ) {
+            
+            console.log(`Access token does not exist or invalid...`);
+            accessToken = await getAppToken();
+            console.log(`New access token: [...${accessToken.access_token.slice(-6)}]`);
+            const response = await needle('get', url, {
+                headers: {
+                    'Client-ID': TWITCH_CLIENT_ID,
+                    'Authorization': `Bearer ${accessToken.access_token}`,
+                },
+            });
+            
+            response.body.last_updated = Date.now();
+            if (response.statusCode === 200) {
+                res.json(response.body);
+            } else {
+                throw new Error('Failed to fetch data from Twitch API.');
+            }
 
-        const response = await needle('get', url, {
-            headers: {
-                'Client-ID': TWITCH_CLIENT_ID,
-                'Authorization': `Bearer ${accessToken}`,
-            },
-        });
-
-        if (response.statusCode === 200) {
-            res.json(response.body);
         } else {
-            throw new Error('Failed to fetch data from Twitch API.');
+            console.log(`[...${accessToken.access_token.slice(-6)}] Access token still valid...`)
+            const response = await needle('get', url, {
+                headers: {
+                    'Client-ID': TWITCH_CLIENT_ID,
+                    'Authorization': `Bearer ${accessToken.access_token}`,
+                },
+            });
+            
+            response.body.last_updated = Date.now();
+            
+            if (response.statusCode === 200) {
+                res.json(response.body);
+            } else {
+                throw new Error('Failed to fetch data from Twitch API.');
+            }
         }
     } catch (error) {
         res.status(500).json({ error: error.message });
