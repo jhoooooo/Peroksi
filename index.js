@@ -121,7 +121,9 @@ app.get('/api/twitch/*', cache('5 minutes'), async (req, res) => {
                 },
             });
 
+            const timestamp = new Date();
             response.body.last_updated = Date.now();
+            response.body.last_updated_locale = timestamp.toUTCString();
 
             if (response.statusCode === 200) {
                 res.set({ 'Cache-Control': 'max-age=300' });
